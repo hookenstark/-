@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>医药商城医保订单监控看板</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            medical: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              200: '#bfdbfe',
+              300: '#93c5fd',
+              400: '#60a5fa',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* 自定义滚动条 */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* 表格斑马纹 + hover */
+    .table-row-zebra:nth-child(even) {
+      background-color: #f8fafc;
+    }
+    .table-row-zebra:hover {
+      background-color: #eff6ff !important;
+    }
+
+    /* 弹窗动画 */
+    .modal-enter {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    .modal-enter-active {
+      opacity: 1;
+      transform: scale(1);
+      transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+    }
+    .modal-exit {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .modal-exit-active {
+      opacity: 0;
+      transform: scale(0.95);
+      transition: opacity 0.15s ease-in, transform 0.15s ease-in;
+    }
+
+    /* 日期时间输入框样式优化 */
+    input[type="datetime-local"] {
+      position: relative;
+    }
+    input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+      position: absolute;
+      right: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    input[type="datetime-local"]::after {
+      content: "";
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5' /%3E%3C/svg%3E");
+      background-size: contain;
+      background-repeat: no-repeat;
+      pointer-events: none;
+    }
+
+    /* datetime-local placeholder 样式 */
+    input[type="datetime-local"].empty::-webkit-datetime-edit {
+      color: transparent;
+    }
+    input[type="datetime-local"].empty::before {
+      content: attr(placeholder);
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      pointer-events: none;
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+  <!-- 页面容器 -->
+  <div class="max-w-[1600px] mx-auto px-6 py-6">
+
+    <!-- 页面标题 -->
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-slate-900 tracking-tight">网上药店 · 医保个账订单监控看板</h1>
+      <p class="text-sm text-slate-500 mt-1">实时监控商城医保个账订单数据</p>
+    </div>
+
+    <!-- 顶部数据卡片区域 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+
+      <!-- 卡片1：当日医保订单（合并失败统计） -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 hover:shadow-md transition-shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-base font-semibold text-slate-700">当日医保订单</h2>
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-medical-50 text-medical-700">今日</span>
+        </div>
+        <!-- 第一行：订单数量和销售额 -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p class="text-sm text-slate-500 mb-1">订单数量（不含放弃支付）</p>
+            <p class="text-2xl font-bold text-slate-900" id="todayOrderCount">--</p>
+            <div class="flex items-center mt-1 text-sm h-5"></div>
+          </div>
+          <div>
+            <p class="text-sm text-slate-500 mb-1">医保销售额</p>
+            <p class="text-2xl font-bold text-slate-900" id="todaySales">--</p>
+            <div class="flex items-center mt-1 text-sm h-5"></div>
+          </div>
+        </div>
+        <!-- 第二行：支付失败统计 -->
+        <div class="pt-4 border-t border-slate-100">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium text-slate-600">支付失败统计</span>
+            <span class="text-xs text-slate-400">失败率 <span id="failRate" class="font-semibold text-slate-600">--</span></span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="bg-slate-50 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-500 mb-1">失败总数</p>
+              <p class="text-lg font-bold text-slate-800" id="failTotal">--</p>
+            </div>
+            <div class="bg-amber-50 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-500 mb-1">切换其他支付</p>
+              <p class="text-lg font-bold text-amber-600" id="failSwitchSuccess">--</p>
+            </div>
+            <div class="bg-rose-50 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-500 mb-1">放弃支付</p>
+              <p class="text-lg font-bold text-red-600" id="failAbandoned">--</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 卡片2：昨日医保订单（环比：前天 vs 昨天） -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 hover:shadow-md transition-shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-base font-semibold text-slate-700">昨日医保订单</h2>
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-medical-50 text-medical-700">昨日</span>
+        </div>
+        <!-- 第一行：订单数量和销售额 -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p class="text-sm text-slate-500 mb-1">订单数量（不含放弃支付）</p>
+            <p class="text-2xl font-bold text-slate-900" id="yesterdayOrderCount">--</p>
+            <div class="flex items-center mt-1 text-sm h-5" id="yesterdayOrderTrend"></div>
+          </div>
+          <div>
+            <p class="text-sm text-slate-500 mb-1">医保销售额</p>
+            <p class="text-2xl font-bold text-slate-900" id="yesterdaySales">--</p>
+            <div class="flex items-center mt-1 text-sm h-5" id="yesterdaySalesTrend"></div>
+          </div>
+        </div>
+        <!-- 第二行：支付失败统计 -->
+        <div class="pt-4 border-t border-slate-100">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium text-slate-600">支付失败统计</span>
+            <span class="text-xs text-slate-400">失败率 <span id="yesterdayFailRate" class="font-semibold text-slate-600">--</span></span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="bg-slate-50 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-500 mb-1">失败总数</p>
+              <p class="text-lg font-bold text-slate-800" id="yesterdayFailTotal">--</p>
+            </div>
+            <div class="bg-amber-50 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-500 mb-1">切换其他支付</p>
+              <p class="text-lg font-bold text-amber-600" id="yesterdaySwitchCount">--</p>
+            </div>
+            <div class="bg-rose-50 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-500 mb-1">放弃支付</p>
+              <p class="text-lg font-bold text-red-600" id="yesterdayFailCount">--</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 卡片3：近30天医保订单（有环比） -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 hover:shadow-md transition-shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-base font-semibold text-slate-700">近30天医保订单</h2>
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-medical-50 text-medical-700">30天</span>
+        </div>
+        <!-- 第一行：订单数量和销售额 -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p class="text-sm text-slate-500 mb-1">订单数量（不含放弃支付）</p>
+            <p class="text-2xl font-bold text-slate-900" id="monthOrderCount">--</p>
+            <div class="flex items-center mt-1 text-sm h-5" id="monthOrderTrend"></div>
+          </div>
+          <div>
+            <p class="text-sm text-slate-500 mb-1">医保销售额</p>
+            <p class="text-2xl font-bold text-slate-900" id="monthSales">--</p>
+            <div class="flex items-center mt-1 text-sm h-5" id="monthSalesTrend"></div>
+          </div>
+        </div>
+        <!-- 第二行：支付失败统计 -->
+        <div class="pt-4 border-t border-slate-100">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium text-slate-600">支付失败统计</span>
+            <span class="text-xs text-slate-400">失败率 <span id="monthFailRate" class="font-semibold text-slate-600">--</span></span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="bg-slate-50 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-500 mb-1">失败总数</p>
+              <p class="text-lg font-bold text-slate-800" id="monthFailTotal">--</p>
+            </div>
+            <div class="bg-amber-50 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-500 mb-1">切换其他支付</p>
+              <p class="text-lg font-bold text-amber-600" id="monthSwitchCount">--</p>
+            </div>
+            <div class="bg-rose-50 rounded-lg p-3 text-center">
+              <p class="text-xs text-slate-500 mb-1">放弃支付</p>
+              <p class="text-lg font-bold text-red-600" id="monthFailCount">--</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 下方订单列表区域 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h2 class="text-base font-semibold text-slate-800">医保订单列表</h2>
+        <span class="text-sm text-slate-500" id="orderTotalInfo">共 -- 条记录</span>
+      </div>
+
+      <!-- 筛选栏 -->
+      <div class="px-6 py-4 bg-slate-50/50 border-b border-slate-100">
+        <div class="flex flex-wrap items-end gap-4">
+          <!-- 订单搜索 -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-slate-600">订单搜索</label>
+            <input type="text" id="searchInput" placeholder="输入订单编号" class="w-48 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent transition-all" />
+          </div>
+          <!-- 下单时间范围 -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-slate-600">下单时间范围</label>
+            <div class="flex items-center gap-2">
+              <div class="relative">
+                <input type="datetime-local" id="startTimeInput" placeholder="开始时间" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent transition-all cursor-pointer" />
+              </div>
+              <span class="text-slate-400 text-sm">至</span>
+              <div class="relative">
+                <input type="datetime-local" id="endTimeInput" placeholder="结束时间" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent transition-all cursor-pointer" />
+              </div>
+            </div>
+          </div>
+          <!-- 医保参保地筛选 -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-slate-600">医保参保地</label>
+            <div class="relative">
+              <button id="insuranceCityBtn" class="w-48 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent transition-all text-left flex items-center justify-between">
+                <span id="insuranceCityText">全部</span>
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+              <div id="insuranceCityDropdown" class="hidden absolute top-full left-0 w-48 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                <div class="p-2 space-y-1" id="insuranceCityOptions">
+                  <!-- 城市选项将由JS动态生成 -->
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 医保支付情况筛选 -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-slate-600">医保支付情况</label>
+            <div class="relative">
+              <button id="paymentStatusBtn" class="w-48 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent transition-all text-left flex items-center justify-between">
+                <span id="paymentStatusText">全部</span>
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+              <div id="paymentStatusDropdown" class="hidden absolute top-full left-0 w-48 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                <div class="p-2 space-y-1">
+                  <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" value="医保支付成功" class="payment-status-checkbox rounded border-slate-300 text-medical-600 focus:ring-medical-500">
+                    <span class="text-sm text-slate-700">医保支付成功</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" value="切换其他支付" class="payment-status-checkbox rounded border-slate-300 text-medical-600 focus:ring-medical-500">
+                    <span class="text-sm text-slate-700">切换其他支付</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" value="支付失败" class="payment-status-checkbox rounded border-slate-300 text-medical-600 focus:ring-medical-500">
+                    <span class="text-sm text-slate-700">支付失败</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 支付渠道筛选 -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-slate-600">支付渠道</label>
+            <div class="relative">
+              <button id="paymentChannelBtn" class="w-48 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent transition-all text-left flex items-center justify-between">
+                <span id="paymentChannelText">全部</span>
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+              <div id="paymentChannelDropdown" class="hidden absolute top-full left-0 w-48 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                <div class="p-2 space-y-1">
+                  <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" value="APP（iOS）" class="payment-channel-checkbox rounded border-slate-300 text-medical-600 focus:ring-medical-500">
+                    <span class="text-sm text-slate-700">APP（iOS）</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" value="APP（安卓）" class="payment-channel-checkbox rounded border-slate-300 text-medical-600 focus:ring-medical-500">
+                    <span class="text-sm text-slate-700">APP（安卓）</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" value="APP（鸿蒙）" class="payment-channel-checkbox rounded border-slate-300 text-medical-600 focus:ring-medical-500">
+                    <span class="text-sm text-slate-700">APP（鸿蒙）</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" value="小程序（iOS）" class="payment-channel-checkbox rounded border-slate-300 text-medical-600 focus:ring-medical-500">
+                    <span class="text-sm text-slate-700">小程序（iOS）</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" value="小程序（安卓）" class="payment-channel-checkbox rounded border-slate-300 text-medical-600 focus:ring-medical-500">
+                    <span class="text-sm text-slate-700">小程序（安卓）</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                    <input type="checkbox" value="小程序（鸿蒙）" class="payment-channel-checkbox rounded border-slate-300 text-medical-600 focus:ring-medical-500">
+                    <span class="text-sm text-slate-700">小程序（鸿蒙）</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 按钮组 -->
+          <div class="flex items-center gap-2 ml-auto">
+            <button id="searchBtn" class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-medical-600 text-white hover:bg-medical-700 transition-colors shadow-sm">
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+              搜索
+            </button>
+            <button id="resetBtn" class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm">
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+              重置
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead class="bg-slate-50 text-slate-600 font-medium">
+            <tr>
+              <th class="px-6 py-3 whitespace-nowrap min-w-[120px]">订单编号</th>
+              <th class="px-6 py-3 whitespace-nowrap min-w-[170px]">下单时间</th>
+              <th class="px-6 py-3 whitespace-nowrap text-right min-w-[110px]">订单总金额</th>
+              <th class="px-6 py-3 whitespace-nowrap text-right min-w-[110px]">医保个账消费金额</th>
+              <th class="px-6 py-3 whitespace-nowrap text-right min-w-[90px]">现金自付金额</th>
+              <th class="px-6 py-3 whitespace-nowrap text-center min-w-[80px]">商品总数</th>
+              <th class="px-6 py-3 whitespace-nowrap min-w-[90px]">订单状态</th>
+              <th class="px-6 py-3 whitespace-nowrap min-w-[110px]">医保支付情况</th>
+              <th class="px-6 py-3 whitespace-nowrap min-w-[120px]">支付渠道</th>
+              <th class="px-6 py-3 whitespace-nowrap text-center sticky right-0 bg-slate-50 min-w-[90px] z-10">操作</th>
+            </tr>
+          </thead>
+          <tbody id="orderTableBody" class="divide-y divide-slate-100">
+            <!-- 订单行由 JS 动态生成 -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 分页 -->
+      <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-slate-500" id="paginationInfo">第 1 页，共 1 页</span>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-slate-500">每页</span>
+            <select id="pageSizeSelect" class="px-2 py-1 text-sm rounded border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent">
+              <option value="10">10</option>
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="200">200</option>
+              <option value="500">500</option>
+            </select>
+            <span class="text-sm text-slate-500">条</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2" id="paginationControls">
+          <button id="prevPageBtn" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">上一页</button>
+          <button id="nextPageBtn" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">下一页</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 订单详情弹窗 -->
+  <div id="detailModal" class="fixed inset-0 z-50 hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <!-- 遮罩层 -->
+    <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" id="modalOverlay"></div>
+
+    <div class="fixed inset-0 z-10 overflow-y-auto">
+      <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+        <!-- 弹窗面板 -->
+        <div id="modalPanel" class="relative transform overflow-hidden rounded-xl bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg modal-enter">
+          <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+            <div class="sm:flex sm:items-start">
+              <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-medical-100 sm:mx-0 sm:h-10 sm:w-10">
+                <svg class="h-6 w-6 text-medical-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+              </div>
+              <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left w-full">
+                <h3 class="text-lg font-semibold leading-6 text-slate-900" id="modalTitle">订单详情</h3>
+                <div class="mt-4 space-y-3 max-h-[60vh] overflow-y-auto pr-2" id="modalContent">
+                  <!-- 详情内容由 JS 填充 -->
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bg-slate-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+            <button type="button" id="closeModalBtn" class="inline-flex w-full justify-center rounded-lg bg-medical-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-medical-500 sm:ml-3 sm:w-auto transition-colors">
+              关闭
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== 工具函数 ====================
+
+    /**
+     * 数字千分位格式化
+     * @param {number} num
+     * @returns {string}
+     */
+    function formatNumber(num) {
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    /**
+     * 金额格式化：保留2位小数 + 千分位
+     * @param {number} amount
+     * @returns {string}
+     */
+    function formatMoney(amount) {
+      return '¥' + formatNumber(amount.toFixed(2));
+    }
+
+    /**
+     * 生成涨跌趋势 HTML
+     * 上涨红色、下降绿色（医疗/股票场景常规配色）
+     * @param {number} percent 涨跌百分比，正数涨、负数跌
+     */
+    function renderTrend(percent, period) {
+      const isUp = percent >= 0;
+      const colorClass = isUp ? 'text-red-500' : 'text-emerald-500';
+      const arrow = isUp
+        ? '<svg class="w-3.5 h-3.5 mr-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>'
+        : '<svg class="w-3.5 h-3.5 mr-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>';
+
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+      const dayBeforeYesterday = new Date(yesterday.getTime() - 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const sixtyDaysAgo = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000);
+
+      let tooltipText;
+      if (period === 'yesterday') {
+        // 昨日环比：前天 vs 昨天
+        const yesterdayStr = `${yesterday.getMonth() + 1}月${yesterday.getDate()}日`;
+        const dayBeforeYesterdayStr = `${dayBeforeYesterday.getMonth() + 1}月${dayBeforeYesterday.getDate()}日`;
+        tooltipText = `对比规则：${dayBeforeYesterdayStr} vs ${yesterdayStr}`;
+      } else if (period === 'month30') {
+        // 近30天环比：上30天 vs 近30天
+        // 近30天：从今天往前推30天（包含今天）
+        const last30DaysEnd = new Date(today); // 今天结束
+        const last30DaysStart = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000); // 30天前
+        // 上30天：再往前推30天（不包含重叠的一天）
+        const prev30DaysEnd = new Date(last30DaysStart.getTime() - 24 * 60 * 60 * 1000);
+        const prev30DaysStart = new Date(prev30DaysEnd.getTime() - 29 * 24 * 60 * 60 * 1000);
+        
+        const last30EndStr = `${last30DaysEnd.getMonth() + 1}月${last30DaysEnd.getDate()}日`;
+        const last30StartStr = `${last30DaysStart.getMonth() + 1}月${last30DaysStart.getDate()}日`;
+        const prev30EndStr = `${prev30DaysEnd.getMonth() + 1}月${prev30DaysEnd.getDate()}日`;
+        const prev30StartStr = `${prev30DaysStart.getMonth() + 1}月${prev30DaysStart.getDate()}日`;
+        tooltipText = `对比规则：${prev30StartStr}-${prev30EndStr} vs ${last30StartStr}-${last30EndStr}`;
+      } else {
+        tooltipText = '对比规则';
+      }
+      return `<span class="inline-flex items-center ${colorClass} font-medium cursor-pointer relative group">${arrow}${Math.abs(percent).toFixed(2)}%<span class="absolute top-full left-0 mt-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg">${tooltipText}<span class="absolute bottom-full left-4 mb-0 border-4 border-transparent border-b-slate-800"></span></span></span>`;
+    }
+
+    /**
+     * 格式化日期时间
+     */
+    function formatDateTime(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      const h = String(date.getHours()).padStart(2, '0');
+      const min = String(date.getMinutes()).padStart(2, '0');
+      const s = String(date.getSeconds()).padStart(2, '0');
+      return `${y}-${m}-${d} ${h}:${min}:${s}`;
+    }
+
+    // ==================== 模拟数据 ====================
+
+    const MOCK_ORDERS = [];
+    const DRUG_LIST = [
+      { code: '2343', name: '阿莫西林胶囊', spec: '0.25g*24粒' },
+      { code: '2344', name: '布洛芬缓释片', spec: '0.3g*20片' },
+      { code: '2345', name: '感冒灵颗粒', spec: '10g*9袋' },
+      { code: '2346', name: '维生素C片', spec: '100mg*100片' },
+      { code: '2347', name: '复方甘草片', spec: '0.3g*100片' },
+      { code: '2348', name: '头孢克肟胶囊', spec: '0.1g*10粒' },
+      { code: '2349', name: '奥美拉唑肠溶胶囊', spec: '20mg*14粒' },
+      { code: '2350', name: '二甲双胍片', spec: '0.5g*30片' },
+      { code: '2351', name: '氨氯地平片', spec: '5mg*28片' },
+      { code: '2352', name: '阿托伐他汀钙片', spec: '100mg*30片' },
+    ];
+    const DRUG_IMAGES = [
+      'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=80&h=80&fit=crop',
+      'https://images.unsplash.com/photo-1626285861696-9f0bf5a49c6d?w=80&h=80&fit=crop',
+      'https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=80&h=80&fit=crop',
+      'https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=80&h=80&fit=crop',
+      'https://images.unsplash.com/photo-1585435557343-3b092031a831?w=80&h=80&fit=crop',
+      'https://images.unsplash.com/photo-1631549916768-4119b2e5f926?w=80&h=80&fit=crop',
+    ];
+
+    // 订单物流状态
+    const ORDER_STATUSES = [
+      '订单待确认', '收到货款', '确认有效', '医师审核', '业务审核',
+      '库存不足待采购', '库存满足', '订单开票', '已打单待拣货', '已拣货待出库',
+      '已出库待打包', '确认发货', '收到商品订单完成', '用户拒收商品', '收到退货',
+      '退款成功，订单完成', '取消订单', '已履约(创新支付拆单取消)'
+    ];
+
+    // 支付状态
+    const PAYMENT_STATUSES = ['医保支付成功', '切换其他支付', '支付失败'];
+
+    // 支付渠道
+    const PAYMENT_CHANNELS = ['APP（iOS）', 'APP（安卓）', 'APP（鸿蒙）', '小程序（iOS）', '小程序（安卓）', '小程序（鸿蒙）'];
+
+    // 广东省内城市（医保参保地）
+    const GUANGDONG_CITIES = ['广州市', '深圳市', '珠海市', '汕头市', '佛山市', '韶关市', '湛江市', '肇庆市', '江门市', '茂名市', '惠州市', '梅州市', '汕尾市', '河源市', '阳江市', '清远市', '东莞市', '中山市', '潮州市', '揭阳市', '云浮市'];
+
+    // 生成1000条模拟订单数据（用于展示分页）
+    for (let i = 1; i <= 1000; i++) {
+      // 先生成商品金额（不含运费）
+      const productAmount = parseFloat((Math.random() * 800 + 50).toFixed(2));
+      // 计算运费：商品金额≥88元包邮，否则从15、10、5元中随机选择
+      const shippingOptions = [15, 10, 5];
+      const shippingFee = productAmount >= 88 ? 0 : shippingOptions[Math.floor(Math.random() * shippingOptions.length)];
+      // 订单总额 = 商品金额 + 运费
+      const totalAmount = parseFloat((productAmount + shippingFee).toFixed(2));
+      // 医保个账支付比例：0% - 100%，允许全额医保支付（现金自付为0）
+      // 医保支付只针对商品金额，不包含运费
+      const insuranceAmount = parseFloat((productAmount * Math.random()).toFixed(2));
+      // 现金自付 = 商品金额 - 医保支付金额
+      const cashAmount = parseFloat((productAmount - insuranceAmount).toFixed(2));
+      // 生成商品种类数（1-5种）
+      const productTypes = Math.floor(Math.random() * 5) + 1;
+
+      // 生成药品缩略图列表（去重）
+      const images = [];
+      while (images.length < Math.min(productTypes, 4)) {
+        const img = DRUG_IMAGES[Math.floor(Math.random() * DRUG_IMAGES.length)];
+        if (!images.includes(img)) images.push(img);
+      }
+
+      // 生成下单时间（最近30天内）
+      const orderTime = new Date();
+      orderTime.setMinutes(orderTime.getMinutes() - Math.floor(Math.random() * 43200));
+
+      // 从新的订单状态列表中随机选择一个状态
+      const status = ORDER_STATUSES[Math.floor(Math.random() * ORDER_STATUSES.length)];
+
+      // 支付状态分布：医保支付成功 60%，切换其他支付 30%，支付失败 10%
+      const paymentRand = Math.random();
+      let paymentStatus;
+      if (paymentRand < 0.60) paymentStatus = '医保支付成功';
+      else if (paymentRand < 0.90) paymentStatus = '切换其他支付';
+      else paymentStatus = '支付失败';
+
+      // 随机选择支付渠道
+      const paymentChannel = PAYMENT_CHANNELS[Math.floor(Math.random() * PAYMENT_CHANNELS.length)];
+
+      // 随机选择医保参保地
+      const insuranceCity = GUANGDONG_CITIES[Math.floor(Math.random() * GUANGDONG_CITIES.length)];
+
+      // 生成药品列表（每种商品有数量）
+      const drugs = Array.from({ length: productTypes }, () => ({
+        ...DRUG_LIST[Math.floor(Math.random() * DRUG_LIST.length)],
+        quantity: Math.floor(Math.random() * 5) + 1
+      }));
+
+      // 计算商品总数 = 所有商品数量之和
+      const productCount = drugs.reduce((sum, drug) => sum + drug.quantity, 0);
+
+      MOCK_ORDERS.push({
+        id: '56' + String(Date.now()).slice(-10) + String(i).padStart(4, '0'),
+        orderTime: orderTime,
+        totalAmount,
+        insuranceAmount,
+        cashAmount,
+        shippingFee,
+        productCount,
+        images,
+        drugs: drugs,
+        status: status,
+        paymentStatus: paymentStatus,
+        paymentChannel: paymentChannel,
+        insuranceCity: insuranceCity,
+      });
+    }
+
+    // 按下单时间倒序排列
+    MOCK_ORDERS.sort((a, b) => b.orderTime - a.orderTime);
+
+    // ==================== 顶部卡片数据（模拟） ====================
+
+    const TODAY_STATS = {
+      orderCount: 1286,
+      orderCountTrend: 12.35,
+      sales: 68432.50,
+      salesTrend: -5.20,
+    };
+
+    const MONTH_STATS = {
+      orderCount: 38456,
+      orderCountTrend: 8.65,
+      sales: 2156789.45,
+      salesTrend: 15.30,
+    };
+
+    // 失败统计数据将根据订单列表实时计算
+
+    // ==================== 筛选与分页状态 ====================
+
+    let filteredOrders = [...MOCK_ORDERS];
+    let currentPage = 1;
+    let pageSize = 100;
+
+    function getStatusBadge(status) {
+      // 订单状态以普通纯文本显示
+      return `<span class="text-slate-700">${status}</span>`;
+    }
+
+    function getPaymentBadge(paymentStatus) {
+      const styles = {
+        '医保支付成功': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        '切换其他支付': 'bg-amber-50 text-amber-700 border-amber-200',
+        '支付失败': 'bg-red-50 text-red-700 border-red-200',
+      };
+      return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[paymentStatus] || 'bg-slate-50 text-slate-600 border-slate-200'}">${paymentStatus}</span>`;
+    }
+
+    function getPaymentChannelBadge(paymentChannel) {
+      // 支付渠道以普通纯文本显示
+      return `<span class="text-slate-700">${paymentChannel}</span>`;
+    }
+
+    function getSelectedPaymentStatuses() {
+      const checkboxes = document.querySelectorAll('.payment-status-checkbox:checked');
+      return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    function getSelectedPaymentChannels() {
+      const checkboxes = document.querySelectorAll('.payment-channel-checkbox:checked');
+      return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    function getSelectedInsuranceCities() {
+      const checkboxes = document.querySelectorAll('.insurance-city-checkbox:checked');
+      return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    function updatePaymentStatusText() {
+      const selected = getSelectedPaymentStatuses();
+      const text = selected.length === 0 ? '全部' : selected.length === 1 ? selected[0] : `已选${selected.length}项`;
+      document.getElementById('paymentStatusText').textContent = text;
+    }
+
+    function updatePaymentChannelText() {
+      const selected = getSelectedPaymentChannels();
+      const text = selected.length === 0 ? '全部' : selected.length === 1 ? selected[0] : `已选${selected.length}项`;
+      document.getElementById('paymentChannelText').textContent = text;
+    }
+
+    function updateInsuranceCityText() {
+      const selected = getSelectedInsuranceCities();
+      const text = selected.length === 0 ? '全部' : selected.length === 1 ? selected[0] : `已选${selected.length}项`;
+      document.getElementById('insuranceCityText').textContent = text;
+    }
+
+    function applyFilters() {
+      const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
+      const startVal = document.getElementById('startTimeInput').value;
+      const endVal = document.getElementById('endTimeInput').value;
+      const selectedPaymentStatuses = getSelectedPaymentStatuses();
+      const selectedPaymentChannels = getSelectedPaymentChannels();
+      const selectedInsuranceCities = getSelectedInsuranceCities();
+
+      const startDate = startVal ? new Date(startVal) : null;
+      const endDate = endVal ? new Date(endVal) : null;
+
+      filteredOrders = MOCK_ORDERS.filter(order => {
+        // 订单编号搜索
+        if (searchVal && !order.id.toLowerCase().includes(searchVal)) {
+          return false;
+        }
+        // 时间范围筛选
+        if (startDate && order.orderTime < startDate) {
+          return false;
+        }
+        if (endDate && order.orderTime > endDate) {
+          return false;
+        }
+        // 医保支付情况筛选（多选）
+        if (selectedPaymentStatuses.length > 0 && !selectedPaymentStatuses.includes(order.paymentStatus)) {
+          return false;
+        }
+        // 支付渠道筛选（多选）
+        if (selectedPaymentChannels.length > 0 && !selectedPaymentChannels.includes(order.paymentChannel)) {
+          return false;
+        }
+        // 医保参保地筛选（多选）
+        if (selectedInsuranceCities.length > 0 && !selectedInsuranceCities.includes(order.insuranceCity)) {
+          return false;
+        }
+        return true;
+      });
+
+      currentPage = 1;
+      renderOrderTable();
+      renderCards(); // 筛选后更新看板数据
+    }
+
+    function resetFilters() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('startTimeInput').value = '';
+      document.getElementById('endTimeInput').value = '';
+      document.querySelectorAll('.payment-status-checkbox').forEach(cb => cb.checked = false);
+      document.querySelectorAll('.payment-channel-checkbox').forEach(cb => cb.checked = false);
+      document.querySelectorAll('.insurance-city-checkbox').forEach(cb => cb.checked = false);
+      updatePaymentStatusText();
+      updatePaymentChannelText();
+      updateInsuranceCityText();
+      // 重置 datetime-local placeholder 状态
+      updateDateTimePlaceholder(document.getElementById('startTimeInput'));
+      updateDateTimePlaceholder(document.getElementById('endTimeInput'));
+      filteredOrders = [...MOCK_ORDERS];
+      currentPage = 1;
+      renderOrderTable();
+      renderCards(); // 重置后更新看板数据
+    }
+
+    // ==================== 渲染函数 ====================
+
+    function renderCards() {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+      const dayBeforeYesterday = new Date(yesterday.getTime() - 24 * 60 * 60 * 1000);
+      // 近30天：从今天往前推30天（包含今天）
+      const last30DaysEnd = new Date(tomorrow); // 截止到今天结束
+      const last30DaysStart = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000); // 30天前
+      // 上30天：再往前推30天（不包含重叠的一天）
+      const prev30DaysEnd = new Date(last30DaysStart);
+      const prev30DaysStart = new Date(prev30DaysEnd.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      // 基于订单列表实时计算
+      const todayOrders = MOCK_ORDERS.filter(o => o.orderTime >= today && o.orderTime < tomorrow);
+      const yesterdayOrders = MOCK_ORDERS.filter(o => o.orderTime >= yesterday && o.orderTime < today);
+      const dayBeforeYesterdayOrders = MOCK_ORDERS.filter(o => o.orderTime >= dayBeforeYesterday && o.orderTime < yesterday);
+      const last30DaysOrders = MOCK_ORDERS.filter(o => o.orderTime >= last30DaysStart && o.orderTime < last30DaysEnd);
+      const prev30DaysOrders = MOCK_ORDERS.filter(o => o.orderTime >= prev30DaysStart && o.orderTime < prev30DaysEnd);
+
+      // 卡片1：当日医保订单（今日，无环比）
+      // 订单数量不含放弃支付
+      const todayOrderCount = todayOrders.filter(o => o.paymentStatus !== '支付失败').length;
+      const todaySales = todayOrders.filter(o => o.paymentStatus !== '支付失败').reduce((sum, o) => sum + o.totalAmount, 0);
+
+      document.getElementById('todayOrderCount').textContent = formatNumber(todayOrderCount);
+      document.getElementById('todaySales').textContent = formatMoney(todaySales);
+
+      // 卡片2：当日医保支付失败统计（只统计今日订单）
+      const todaySwitchCashSuccessCount = todayOrders.filter(o => o.paymentStatus === '切换其他支付').length;
+      const todayPaymentFailCount = todayOrders.filter(o => o.paymentStatus === '支付失败').length;
+      const todayFailTotal = todaySwitchCashSuccessCount + todayPaymentFailCount;
+      // 失败率 = (切换其他支付 + 支付失败) / 总订单数量（包含所有支付状态）
+      const todayTotalOrders = todayOrders.length;
+      const todayFailRate = todayTotalOrders > 0 ? ((todayFailTotal / todayTotalOrders) * 100).toFixed(2) : '0.00';
+
+      document.getElementById('failTotal').textContent = formatNumber(todayFailTotal);
+      document.getElementById('failSwitchSuccess').textContent = formatNumber(todaySwitchCashSuccessCount);
+      document.getElementById('failAbandoned').textContent = formatNumber(todayPaymentFailCount);
+      document.getElementById('failRate').textContent = todayFailRate + '%';
+
+      // 卡片3：昨日医保订单（环比：前天 vs 昨天）
+      // 订单数量不含放弃支付
+      const yesterdayOrderCount = yesterdayOrders.filter(o => o.paymentStatus !== '支付失败').length;
+      const yesterdaySales = yesterdayOrders.filter(o => o.paymentStatus !== '支付失败').reduce((sum, o) => sum + o.totalAmount, 0);
+      const dayBeforeYesterdayOrderCount = dayBeforeYesterdayOrders.filter(o => o.paymentStatus !== '支付失败').length;
+      const dayBeforeYesterdaySales = dayBeforeYesterdayOrders.filter(o => o.paymentStatus !== '支付失败').reduce((sum, o) => sum + o.totalAmount, 0);
+
+      // 计算昨日环比（前天 vs 昨天）
+      const yesterdayOrderTrend = calculateDayOverDay(yesterdayOrderCount, dayBeforeYesterdayOrderCount);
+      const yesterdaySalesTrend = calculateDayOverDay(yesterdaySales, dayBeforeYesterdaySales);
+
+      document.getElementById('yesterdayOrderCount').textContent = formatNumber(yesterdayOrderCount);
+      document.getElementById('yesterdaySales').textContent = formatMoney(yesterdaySales);
+      document.getElementById('yesterdayOrderTrend').innerHTML = renderTrend(yesterdayOrderTrend, 'yesterday');
+      document.getElementById('yesterdaySalesTrend').innerHTML = renderTrend(yesterdaySalesTrend, 'yesterday');
+
+      // 昨日支付失败统计
+      const yesterdaySwitchCount = yesterdayOrders.filter(o => o.paymentStatus === '切换其他支付').length;
+      const yesterdayFailCount = yesterdayOrders.filter(o => o.paymentStatus === '支付失败').length;
+      const yesterdayFailTotal = yesterdaySwitchCount + yesterdayFailCount;
+      // 失败率 = (切换其他支付 + 支付失败) / 总订单数量（包含所有支付状态）
+      const yesterdayTotalOrders = yesterdayOrders.length;
+      const yesterdayFailRate = yesterdayTotalOrders > 0 ? ((yesterdayFailTotal / yesterdayTotalOrders) * 100).toFixed(2) : '0.00';
+
+      document.getElementById('yesterdayFailTotal').textContent = formatNumber(yesterdayFailTotal);
+      document.getElementById('yesterdaySwitchCount').textContent = formatNumber(yesterdaySwitchCount);
+      document.getElementById('yesterdayFailCount').textContent = formatNumber(yesterdayFailCount);
+      document.getElementById('yesterdayFailRate').textContent = yesterdayFailRate + '%';
+
+      // 卡片4：近30天医保订单（环比：上30天 vs 近30天）
+      // 订单数量不含放弃支付
+      const last30DaysOrderCount = last30DaysOrders.filter(o => o.paymentStatus !== '支付失败').length;
+      const last30DaysSales = last30DaysOrders.filter(o => o.paymentStatus !== '支付失败').reduce((sum, o) => sum + o.totalAmount, 0);
+      const prev30DaysOrderCount = prev30DaysOrders.filter(o => o.paymentStatus !== '支付失败').length;
+      const prev30DaysSales = prev30DaysOrders.filter(o => o.paymentStatus !== '支付失败').reduce((sum, o) => sum + o.totalAmount, 0);
+
+      // 计算近30天环比（上30天 vs 近30天）
+      const monthOrderTrend = calculateDayOverDay(last30DaysOrderCount, prev30DaysOrderCount);
+      const monthSalesTrend = calculateDayOverDay(last30DaysSales, prev30DaysSales);
+
+      document.getElementById('monthOrderCount').textContent = formatNumber(last30DaysOrderCount);
+      document.getElementById('monthSales').textContent = formatMoney(last30DaysSales);
+      document.getElementById('monthOrderTrend').innerHTML = renderTrend(monthOrderTrend, 'month30');
+      document.getElementById('monthSalesTrend').innerHTML = renderTrend(monthSalesTrend, 'month30');
+
+      // 近30天支付失败统计
+      const monthSwitchCount = last30DaysOrders.filter(o => o.paymentStatus === '切换其他支付').length;
+      const monthFailCount = last30DaysOrders.filter(o => o.paymentStatus === '支付失败').length;
+      const monthFailTotal = monthSwitchCount + monthFailCount;
+      // 失败率 = (切换其他支付 + 支付失败) / 总订单数量（包含所有支付状态）
+      const monthTotalOrders = last30DaysOrders.length;
+      const monthFailRate = monthTotalOrders > 0 ? ((monthFailTotal / monthTotalOrders) * 100).toFixed(2) : '0.00';
+
+      document.getElementById('monthFailTotal').textContent = formatNumber(monthFailTotal);
+      document.getElementById('monthSwitchCount').textContent = formatNumber(monthSwitchCount);
+      document.getElementById('monthFailCount').textContent = formatNumber(monthFailCount);
+      document.getElementById('monthFailRate').textContent = monthFailRate + '%';
+    }
+
+    // 计算日环比（当前值 vs 对比值）
+    function calculateDayOverDay(currentValue, compareValue) {
+      if (compareValue === 0) return currentValue > 0 ? 100 : 0;
+      return ((currentValue - compareValue) / compareValue * 100);
+    }
+
+    function renderOrderTable() {
+      const tbody = document.getElementById('orderTableBody');
+      const total = filteredOrders.length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+      // 确保当前页在有效范围内
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+
+      const start = (currentPage - 1) * pageSize;
+      const end = Math.min(start + pageSize, total);
+      const pageOrders = filteredOrders.slice(start, end);
+
+      document.getElementById('orderTotalInfo').textContent = `共 ${total} 条记录`;
+      document.getElementById('paginationInfo').textContent = `第 ${currentPage} 页，共 ${totalPages} 页`;
+      document.getElementById('prevPageBtn').disabled = currentPage === 1;
+      document.getElementById('nextPageBtn').disabled = currentPage === totalPages;
+
+      if (pageOrders.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="px-6 py-12 text-center text-slate-400">
+              <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+              暂无符合条件的订单
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = pageOrders.map((order, index) => {
+        return `
+          <tr class="table-row-zebra transition-colors">
+            <td class="px-6 py-4 whitespace-nowrap font-mono text-slate-600 min-w-[120px]">${order.id}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-slate-600 min-w-[170px]">${formatDateTime(order.orderTime)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right font-semibold text-slate-800 min-w-[110px]">${formatMoney(order.totalAmount)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-medical-600 font-medium min-w-[110px]">${formatMoney(order.insuranceAmount)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-slate-600 min-w-[90px]">${formatMoney(order.cashAmount)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center min-w-[80px]">
+              <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">${order.productCount}</span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap min-w-[90px]">${getStatusBadge(order.status)}</td>
+            <td class="px-6 py-4 whitespace-nowrap min-w-[110px]">${getPaymentBadge(order.paymentStatus)}</td>
+            <td class="px-6 py-4 whitespace-nowrap min-w-[120px]">${getPaymentChannelBadge(order.paymentChannel)}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center sticky right-0 bg-white min-w-[90px] z-10">
+              <button data-id="${order.id}" class="view-detail-btn inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-medical-50 text-medical-700 hover:bg-medical-100 transition-colors border-medical-200">
+                查看明细
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      // 绑定查看明细按钮事件
+      document.querySelectorAll('.view-detail-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const orderId = btn.getAttribute('data-id');
+          const order = MOCK_ORDERS.find(o => o.id === orderId);
+          if (order) openModal(order);
+        });
+      });
+    }
+
+    // ==================== 弹窗逻辑 ====================
+
+    const modal = document.getElementById('detailModal');
+    const modalPanel = document.getElementById('modalPanel');
+    const modalOverlay = document.getElementById('modalOverlay');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+
+    function openModal(order) {
+      document.getElementById('modalTitle').textContent = `订单详情 · ${order.id}`;
+      
+      // 生成顶部医保医保支付情况区域
+      let paymentInfoHtml = '';
+      if (order.paymentStatus === '医保支付成功') {
+        paymentInfoHtml = `
+          <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
+            <div class="flex items-center gap-2 mb-2">
+              <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span class="font-semibold text-emerald-800">支付成功</span>
+            </div>
+            <p class="text-sm text-emerald-700">医保支付已成功完成</p>
+          </div>
+        `;
+      } else if (order.paymentStatus === '切换其他支付') {
+        // 随机选择支付方式
+        const paymentMethods = ['微信支付', '支付宝支付', '微信好友代付'];
+        const paymentMethod = paymentMethods[Math.floor(Math.random() * paymentMethods.length)];
+        paymentInfoHtml = `
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+            <div class="flex items-center gap-2 mb-2">
+              <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+              </svg>
+              <span class="font-semibold text-amber-800">切换其他支付（${paymentMethod}）</span>
+            </div>
+            <p class="text-sm text-amber-700">该订单用户使用医保支付失败，转用其他支付方式</p>
+          </div>
+        `;
+      } else {
+        // 支付失败
+        paymentInfoHtml = `
+          <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <div class="flex items-center gap-2 mb-2">
+              <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span class="font-semibold text-red-800">支付失败</span>
+            </div>
+            <p class="text-sm text-red-700">该订单支付失败，未完成交易</p>
+          </div>
+        `;
+      }
+      
+      // 生成医保支付失败明细（多个，按时间倒序）
+      let errorDetailsHtml = '';
+      if (order.paymentStatus !== '医保支付成功') {
+        // 模拟2-4条失败记录
+        const failCount = Math.floor(Math.random() * 3) + 2;
+        const errorDetails = [];
+        const baseTime = new Date(order.orderTime);
+        
+        for (let i = 0; i < failCount; i++) {
+          // 每次失败时间递减（倒序）
+          const failTime = new Date(baseTime.getTime() - i * 5 * 60 * 1000); // 每次间隔5分钟
+          const timestamp = formatDateTime(failTime).replace(/[-: ]/g, '');
+          
+          // 不同的错误信息
+          const errorCodes = ['195', '196', '197', '198'];
+          const errorMsgs = [
+            '支付授权与订单信息对应的用户不一致',
+            '医保账户余额不足',
+            '医保系统繁忙，请稍后重试',
+            '参保人信息校验失败'
+          ];
+          const errorIdx = i % errorCodes.length;
+          
+          const errorDetail = `[医保移动支付]订单预结算失败,orderId:${order.id},error:${errorCodes[errorIdx]}${errorMsgs[errorIdx]},1-${timestamp}-995343d1085f470c91039a938bcea341${errorMsgs[errorIdx]},1`;
+          
+          errorDetails.push({
+            time: formatDateTime(failTime),
+            detail: errorDetail
+          });
+        }
+        
+        errorDetailsHtml = `
+          <div class="mt-4 border-t border-slate-200 pt-4">
+            <p class="text-sm font-medium text-slate-700 mb-3">医保支付失败明细（${errorDetails.length}次尝试）</p>
+            <div class="space-y-3">
+              ${errorDetails.map((item, idx) => `
+                <div class="bg-red-50 border border-red-100 rounded-lg p-3">
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="text-xs font-medium text-red-600">第${errorDetails.length - idx}次</span>
+                    <span class="text-xs text-slate-500">${item.time}</span>
+                  </div>
+                  <p class="text-xs text-slate-700 font-mono break-all">${item.detail}</p>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+      
+      document.getElementById('modalContent').innerHTML = `
+        ${paymentInfoHtml}
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-slate-500 mb-1">下单时间</p>
+            <p class="font-medium text-slate-800">${formatDateTime(order.orderTime)}</p>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-slate-500 mb-1">订单状态</p>
+            <p class="font-medium">${getStatusBadge(order.status)}</p>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-slate-500 mb-1">支付渠道</p>
+            <p class="font-medium text-slate-800">${order.paymentChannel}</p>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-slate-500 mb-1">医保参保地</p>
+            <p class="font-medium text-slate-800">${order.insuranceCity}</p>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-slate-500 mb-1">订单总金额</p>
+            <p class="font-semibold text-slate-900">${formatMoney(order.totalAmount)}</p>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-slate-500 mb-1">医保个账消费金额</p>
+            <p class="font-semibold text-medical-600">${formatMoney(order.insuranceAmount)}</p>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-slate-500 mb-1">现金自付金额</p>
+            <p class="font-semibold text-slate-800">${formatMoney(order.cashAmount)}</p>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-slate-500 mb-1">运费金额</p>
+            <p class="font-semibold text-slate-800">${formatMoney(order.shippingFee)}</p>
+          </div>
+        </div>
+        <div class="mt-2">
+          <p class="text-sm text-slate-500 mb-2">药品清单</p>
+          <div class="space-y-2">
+            ${order.drugs.map((drug, idx) => `
+              <div class="flex items-center gap-3 bg-slate-50 rounded-lg p-2">
+                <img src="${order.images[idx % order.images.length]}" alt="" class="w-8 h-8 rounded-md object-cover border border-slate-200 flex-shrink-0" />
+                <div class="flex items-center gap-3 text-sm text-slate-700 min-w-0 flex-1">
+                  <span class="font-mono text-slate-500 flex-shrink-0">${drug.code}</span>
+                  <span class="font-medium truncate">${drug.name}</span>
+                  <span class="text-slate-500 flex-shrink-0">${drug.spec}</span>
+                </div>
+                <span class="text-sm text-slate-500 flex-shrink-0">×${drug.quantity}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        ${errorDetailsHtml}
+      `;
+
+      modal.classList.remove('hidden');
+      // 重置弹窗内容滚动位置到顶部
+      document.getElementById('modalContent').scrollTop = 0;
+      // 触发动画
+      requestAnimationFrame(() => {
+        modalPanel.classList.remove('modal-enter');
+        modalPanel.classList.add('modal-enter-active');
+      });
+    }
+
+    function closeModal() {
+      modalPanel.classList.remove('modal-enter-active');
+      modalPanel.classList.add('modal-exit-active');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+        modalPanel.classList.remove('modal-exit-active');
+        modalPanel.classList.add('modal-enter');
+      }, 150);
+    }
+
+    closeModalBtn.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', closeModal);
+
+    // ESC 关闭弹窗
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+        closeModal();
+      }
+    });
+
+    // ==================== 事件绑定 ====================
+
+    document.getElementById('searchBtn').addEventListener('click', applyFilters);
+    document.getElementById('resetBtn').addEventListener('click', resetFilters);
+
+    // 支持回车键搜索
+    document.getElementById('searchInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') applyFilters();
+    });
+
+    // datetime-local placeholder 处理
+    function updateDateTimePlaceholder(input) {
+      if (input.value) {
+        input.classList.remove('empty');
+      } else {
+        input.classList.add('empty');
+      }
+    }
+
+    const startTimeInput = document.getElementById('startTimeInput');
+    const endTimeInput = document.getElementById('endTimeInput');
+
+    // 初始化 placeholder 状态
+    updateDateTimePlaceholder(startTimeInput);
+    updateDateTimePlaceholder(endTimeInput);
+
+    // 监听变化
+    startTimeInput.addEventListener('input', () => updateDateTimePlaceholder(startTimeInput));
+    endTimeInput.addEventListener('input', () => updateDateTimePlaceholder(endTimeInput));
+
+    // 初始化医保参保地选项
+    const insuranceCityOptions = document.getElementById('insuranceCityOptions');
+    GUANGDONG_CITIES.forEach(city => {
+      const label = document.createElement('label');
+      label.className = 'flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded cursor-pointer';
+      label.innerHTML = `
+        <input type="checkbox" value="${city}" class="insurance-city-checkbox rounded border-slate-300 text-medical-600 focus:ring-medical-500">
+        <span class="text-sm text-slate-700">${city}</span>
+      `;
+      insuranceCityOptions.appendChild(label);
+    });
+
+    // 医保参保地下拉框
+    const insuranceCityBtn = document.getElementById('insuranceCityBtn');
+    const insuranceCityDropdown = document.getElementById('insuranceCityDropdown');
+    
+    insuranceCityBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      insuranceCityDropdown.classList.toggle('hidden');
+      paymentStatusDropdown.classList.add('hidden');
+      paymentChannelDropdown.classList.add('hidden');
+    });
+
+    // 医保支付情况下拉框
+    const paymentStatusBtn = document.getElementById('paymentStatusBtn');
+    const paymentStatusDropdown = document.getElementById('paymentStatusDropdown');
+    
+    paymentStatusBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      paymentStatusDropdown.classList.toggle('hidden');
+      insuranceCityDropdown.classList.add('hidden');
+      paymentChannelDropdown.classList.add('hidden');
+    });
+
+    // 支付渠道下拉框
+    const paymentChannelBtn = document.getElementById('paymentChannelBtn');
+    const paymentChannelDropdown = document.getElementById('paymentChannelDropdown');
+    
+    paymentChannelBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      paymentChannelDropdown.classList.toggle('hidden');
+      insuranceCityDropdown.classList.add('hidden');
+      paymentStatusDropdown.classList.add('hidden');
+    });
+
+    // 点击页面其他地方关闭下拉框
+    document.addEventListener('click', () => {
+      insuranceCityDropdown.classList.add('hidden');
+      paymentStatusDropdown.classList.add('hidden');
+      paymentChannelDropdown.classList.add('hidden');
+    });
+
+    // 阻止下拉框内部点击事件冒泡
+    insuranceCityDropdown.addEventListener('click', (e) => e.stopPropagation());
+    paymentStatusDropdown.addEventListener('click', (e) => e.stopPropagation());
+    paymentChannelDropdown.addEventListener('click', (e) => e.stopPropagation());
+
+    // 医保参保地复选框变化
+    document.querySelectorAll('.insurance-city-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', () => {
+        updateInsuranceCityText();
+        applyFilters();
+      });
+    });
+
+    // 医保支付情况复选框变化
+    document.querySelectorAll('.payment-status-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', () => {
+        updatePaymentStatusText();
+        applyFilters();
+      });
+    });
+
+    // 支付渠道复选框变化
+    document.querySelectorAll('.payment-channel-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', () => {
+        updatePaymentChannelText();
+        applyFilters();
+      });
+    });
+
+    // 分页数量选择器
+    document.getElementById('pageSizeSelect').addEventListener('change', (e) => {
+      pageSize = parseInt(e.target.value);
+      currentPage = 1; // 切换每页条数时重置到第一页
+      renderOrderTable();
+    });
+
+    document.getElementById('prevPageBtn').addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        renderOrderTable();
+      }
+    });
+
+    document.getElementById('nextPageBtn').addEventListener('click', () => {
+      const totalPages = Math.ceil(filteredOrders.length / pageSize);
+      if (currentPage < totalPages) {
+        currentPage++;
+        renderOrderTable();
+      }
+    });
+
+    // ==================== 初始化 ====================
+
+    (function init() {
+      renderCards();
+      renderOrderTable();
+    })();
+  </script>
+</body>
+</html>
